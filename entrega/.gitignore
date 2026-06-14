@@ -1,0 +1,38 @@
+# Dependências Node
+node_modules/
+
+# Variáveis de ambiente
+.env
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Arquivos do sistema
+.DS_Store
+Thumbs.db
+
+# Cache
+.cache/
+.parcel-cache/
+
+# Build / dist
+dist/
+build/
+
+# Docker temporário
+.docker/
+
+# Arquivos de IDE
+.vscode/
+.idea/
+
+# Coverage de testes
+coverage/
+
+# Arquivos temporários
+tmp/
+temp/
