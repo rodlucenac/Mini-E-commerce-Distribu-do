@@ -12,5 +12,12 @@
     "email": "joao@email.com",
     "passwordHash": "$2a$10$4iDbl0bB3FCEO5mLOukNlezWLJqyCPp/XON9M52TNYoD0acCTrcGW",
     "role": "user"
+  },
+  {
+    "id": 3,
+    "name": "Maria",
+    "email": "maria@email.com",
+    "passwordHash": "$2a$10$5AVDbc9ILBiYJ2EAGiKIA.P45yrAksmlpVJMcc83fPousvAjjOamG",
+    "role": "user"
   }
 ]
