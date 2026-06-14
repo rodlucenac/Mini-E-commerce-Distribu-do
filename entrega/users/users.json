@@ -19,5 +19,12 @@
     "email": "maria@email.com",
     "passwordHash": "$2a$10$5AVDbc9ILBiYJ2EAGiKIA.P45yrAksmlpVJMcc83fPousvAjjOamG",
     "role": "user"
+  },
+  {
+    "id": 4,
+    "name": "GatewayAdmin",
+    "email": "gwadmin@email.com",
+    "passwordHash": "$2a$10$tCF.W7I/C50gM0sLX6SROe44hiCOcnf4rvDiPEN6xOdipdZQwb67y",
+    "role": "admin"
   }
 ]

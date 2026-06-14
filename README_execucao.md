@@ -7,8 +7,9 @@ Este projeto implementa um mini e-commerce distribuído. Atualmente contém:
 - **Serviço de Usuários** — registro, autenticação e consulta de usuários (porta 5001)
 - **Serviço de Produtos** — listagem e criação de produtos com replicação em dois arquivos JSON (porta 5002)
 - **Serviço de Pedidos** — criação e listagem de pedidos (porta 5003)
+- **API Gateway** — ponto único de entrada do cliente (porta 5000)
 
-Os demais serviços (API Gateway, Heartbeat e Docker Compose completo) serão implementados nas próximas etapas.
+Os demais serviços (Heartbeat e Docker Compose completo) serão implementados nas próximas etapas.
 
 ---
 
@@ -159,3 +160,100 @@ curl http://localhost:5003/orders/1 \
 ```
 
 Deve retornar `403`.
+
+---
+
+## API Gateway
+
+### Como rodar o gateway
+
+Antes de rodar o gateway, os três serviços precisam estar rodando:
+
+```bash
+cd entrega/users
+npm install
+npm start
+```
+
+Em outro terminal:
+
+```bash
+cd entrega/products
+npm install
+npm start
+```
+
+Em outro terminal:
+
+```bash
+cd entrega/orders
+npm install
+npm start
+```
+
+Depois, em outro terminal:
+
+```bash
+cd entrega/gateway
+npm install
+npm start
+```
+
+O gateway ficará disponível em `http://localhost:5000`.
+
+### Testar health do gateway
+
+```bash
+curl http://localhost:5000/health
+```
+
+### Usar o sistema pelo Gateway
+
+A partir de agora, o cliente deve usar preferencialmente a porta `5000`. O gateway encaminha as requisições para os microsserviços internos e repassa status HTTP e corpo JSON das respostas.
+
+#### Criar admin pelo gateway
+
+```bash
+curl -X POST http://localhost:5000/users/register \
+  -H "Content-Type: application/json" \
+  -d '{"name":"Admin","email":"admin@email.com","password":"123456","role":"admin"}'
+```
+
+#### Login pelo gateway
+
+```bash
+curl -X POST http://localhost:5000/users/login \
+  -H "Content-Type: application/json" \
+  -d '{"email":"admin@email.com","password":"123456"}'
+```
+
+#### Criar produto pelo gateway
+
+```bash
+curl -X POST http://localhost:5000/products \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer COLE_O_TOKEN_ADMIN_AQUI" \
+  -d '{"name":"Notebook","price":3500,"stock":10}'
+```
+
+#### Listar produtos pelo gateway
+
+```bash
+curl http://localhost:5000/products
+```
+
+#### Criar pedido pelo gateway
+
+```bash
+curl -X POST http://localhost:5000/orders \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer COLE_O_TOKEN_AQUI" \
+  -d '{"productId":1,"quantity":2}'
+```
+
+#### Listar pedidos pelo gateway
+
+```bash
+curl http://localhost:5000/orders/1 \
+  -H "Authorization: Bearer COLE_O_TOKEN_AQUI"
+```
