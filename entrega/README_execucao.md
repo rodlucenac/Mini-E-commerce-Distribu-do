@@ -7,7 +7,7 @@ Este projeto implementa um mini e-commerce distribuído. Atualmente contém:
 - **Serviço de Usuários** — registro, autenticação e consulta de usuários (porta 5001)
 - **Serviço de Produtos** — listagem e criação de produtos com replicação em dois arquivos JSON (porta 5002)
 - **Serviço de Pedidos** — criação e listagem de pedidos (porta 5003)
-- **API Gateway** — ponto único de entrada do cliente (porta 5000)
+- **API Gateway** — ponto único de entrada do cliente com heartbeat (porta 5000)
 
 Os demais componentes (Docker Compose completo e relatório final) serão implementados nas próximas etapas.
 
@@ -258,29 +258,23 @@ curl http://localhost:5000/orders/1 \
   -H "Authorization: Bearer COLE_O_TOKEN_AQUI"
 ```
 
-### Heartbeat no API Gateway
+---
 
-O gateway monitora automaticamente a saúde dos microsserviços. A cada 5 segundos, envia `GET /health` para os serviços de usuários, produtos e pedidos.
+## Heartbeat no API Gateway
 
-Se um serviço falhar em 2 verificações consecutivas, o gateway:
+O gateway verifica `/health` dos serviços a cada 5 segundos. Após 2 falhas consecutivas, marca o serviço como indisponível. Rotas daquele serviço passam a retornar `503`. Quando o serviço volta, o gateway registra recuperação e libera as rotas novamente.
 
-- marca o serviço como indisponível;
-- registra um log com timestamp;
-- bloqueia as rotas daquele serviço, retornando `503`.
-
-Quando o serviço volta a responder corretamente, o gateway registra a recuperação nos logs e libera as rotas novamente.
-
-#### Ver status dos serviços
+### Ver status dos serviços
 
 ```bash
 curl http://localhost:5000/status
 ```
 
-#### Simular queda do Serviço de Pedidos
+### Simular queda do Serviço de Pedidos
 
 Se estiver rodando manualmente, pare o terminal do serviço `orders`.
 
-Aguarde cerca de 10 segundos para o heartbeat detectar 2 falhas consecutivas. Depois teste:
+Depois teste:
 
 ```bash
 curl -X POST http://localhost:5000/orders \
@@ -299,7 +293,7 @@ Deve retornar:
 
 Com status `503`.
 
-#### Confirmar que os outros serviços continuam funcionando
+### Confirmar que os outros serviços continuam funcionando
 
 ```bash
 curl http://localhost:5000/products

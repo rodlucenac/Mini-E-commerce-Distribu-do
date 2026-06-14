@@ -163,14 +163,10 @@ app.get("/orders/:userId", (req, res) => {
   forwardRequest(req, res, "orders", `/orders/${req.params.userId}`);
 });
 
-Object.keys(serviceStatus).forEach((serviceKey) => {
-  checkServiceHealth(serviceKey);
-});
+Object.keys(serviceStatus).forEach(checkServiceHealth);
 
 setInterval(() => {
-  Object.keys(serviceStatus).forEach((serviceKey) => {
-    checkServiceHealth(serviceKey);
-  });
+  Object.keys(serviceStatus).forEach(checkServiceHealth);
 }, 5000);
 
 app.listen(PORT, "0.0.0.0", () => {
