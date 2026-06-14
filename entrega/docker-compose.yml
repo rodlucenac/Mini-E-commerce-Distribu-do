@@ -1,6 +1,7 @@
 services:
   users:
     build: ./users
+    container_name: mini_ecommerce_users
     ports:
       - "5001:5001"
     environment:
@@ -9,6 +10,7 @@ services:
 
   products:
     build: ./products
+    container_name: mini_ecommerce_products
     ports:
       - "5002:5002"
     environment:
@@ -17,6 +19,7 @@ services:
 
   orders:
     build: ./orders
+    container_name: mini_ecommerce_orders
     ports:
       - "5003:5003"
     environment:
@@ -25,6 +28,7 @@ services:
 
   gateway:
     build: ./gateway
+    container_name: mini_ecommerce_gateway
     ports:
       - "5000:5000"
     environment:

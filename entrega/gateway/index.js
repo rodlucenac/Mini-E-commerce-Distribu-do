@@ -36,17 +36,6 @@ const serviceStatus = {
 app.use(cors());
 app.use(express.json());
 
-function handleServiceFailure(service) {
-  service.failures += 1;
-
-  if (service.failures >= 2 && service.available) {
-    service.available = false;
-    console.log(
-      `[${new Date().toISOString()}] Serviço ${service.name} indisponível após 2 falhas consecutivas`
-    );
-  }
-}
-
 async function checkServiceHealth(serviceKey) {
   const service = serviceStatus[serviceKey];
 
@@ -56,20 +45,27 @@ async function checkServiceHealth(serviceKey) {
     });
 
     if (response.status === 200) {
-      const wasUnavailable = !service.available;
-      service.failures = 0;
-      service.available = true;
-
-      if (wasUnavailable) {
+      if (!service.available) {
         console.log(
           `[${new Date().toISOString()}] Serviço ${service.name} recuperado`
         );
       }
-    } else {
-      handleServiceFailure(service);
+
+      service.available = true;
+      service.failures = 0;
+      return;
     }
+
+    throw new Error("Health check failed");
   } catch (error) {
-    handleServiceFailure(service);
+    service.failures += 1;
+
+    if (service.failures >= 2 && service.available) {
+      service.available = false;
+      console.log(
+        `[${new Date().toISOString()}] Serviço ${service.name} indisponível após 2 falhas consecutivas`
+      );
+    }
   }
 }
 
@@ -77,9 +73,9 @@ async function forwardRequest(req, res, serviceKey, path) {
   const service = serviceStatus[serviceKey];
 
   if (!service.available) {
-    return res
-      .status(503)
-      .json({ error: "Serviço indisponível no momento" });
+    return res.status(503).json({
+      error: "Serviço indisponível no momento",
+    });
   }
 
   try {
