@@ -13,7 +13,9 @@ Este projeto implementa um mini e-commerce distribuído com microsserviços:
 
 O cliente deve usar preferencialmente o **Gateway na porta 5000**.
 
-O gateway monitora a saúde dos microsserviços a cada 5 segundos via `GET /health`. Após 2 falhas consecutivas, bloqueia as rotas do serviço indisponível com `503`. O endpoint `GET /status` mostra o estado atual de cada serviço.
+O gateway monitora a saúde dos microsserviços a cada 5 segundos via `GET /health`. Após 2 falhas consecutivas, bloqueia as rotas do serviço indisponível com `503` e registra logs com timestamp. O endpoint `GET /status` exibe o estado atual, falhas consecutivas e timestamps de falha/recuperação de cada serviço.
+
+O Products Service mantém duas réplicas JSON sincronizadas automaticamente.
 
 ---
 
@@ -64,17 +66,23 @@ Resposta esperada:
     "users": {
       "available": true,
       "failures": 0,
-      "url": "http://users:5001"
+      "url": "http://users:5001",
+      "lastFailureAt": null,
+      "lastRecoveryAt": null
     },
     "products": {
       "available": true,
       "failures": 0,
-      "url": "http://products:5002"
+      "url": "http://products:5002",
+      "lastFailureAt": null,
+      "lastRecoveryAt": null
     },
     "orders": {
       "available": true,
       "failures": 0,
-      "url": "http://orders:5003"
+      "url": "http://orders:5003",
+      "lastFailureAt": null,
+      "lastRecoveryAt": null
     }
   }
 }
@@ -279,3 +287,94 @@ curl -X POST http://localhost:5000/orders \
 ```
 
 Deve retornar `503`. Os endpoints de `users` e `products` continuam funcionando.
+
+---
+
+## Teste de tolerância a falhas
+
+Esta seção demonstra o comportamento de tolerância a falhas do Gateway e a consistência das réplicas de produtos.
+
+### 1. Derrubar o serviço de pedidos
+
+Com o sistema rodando via Docker Compose:
+
+```bash
+docker compose stop orders
+```
+
+Aguarde cerca de 10 segundos para o heartbeat detectar 2 falhas consecutivas.
+
+### 2. Verificar o status no Gateway
+
+```bash
+curl http://localhost:5000/status
+```
+
+O serviço `orders` deve aparecer com `"available": false`, `"failures"` maior ou igual a 2 e `"lastFailureAt"` preenchido com timestamp.
+
+Os logs do container `mini_ecommerce_gateway` devem registrar a indisponibilidade, por exemplo:
+
+```text
+[timestamp] Serviço orders indisponível após 2 falhas consecutivas
+```
+
+### 3. Confirmar bloqueio das rotas de pedidos (503)
+
+```bash
+curl -X POST http://localhost:5000/orders \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer COLE_O_TOKEN_USER_AQUI" \
+  -d '{"productId":1,"quantity":2}'
+```
+
+Resposta esperada:
+
+```json
+{
+  "error": "Serviço indisponível no momento"
+}
+```
+
+Status HTTP: `503`.
+
+### 4. Confirmar que Users e Products continuam funcionando
+
+```bash
+curl http://localhost:5000/health
+curl http://localhost:5000/products
+```
+
+### 5. Religar o serviço de pedidos
+
+```bash
+docker compose start orders
+```
+
+Aguarde alguns segundos e verifique novamente:
+
+```bash
+curl http://localhost:5000/status
+```
+
+O serviço `orders` deve voltar com `"available": true` e `"lastRecoveryAt"` preenchido. Os logs do Gateway devem registrar a recuperação.
+
+### 6. Teste de consistência das réplicas de produtos
+
+Crie um produto como admin:
+
+```bash
+curl -X POST http://localhost:5000/products \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer COLE_O_TOKEN_ADMIN_AQUI" \
+  -d '{"name":"Notebook","price":3500,"stock":10}'
+```
+
+Consulte produtos várias vezes:
+
+```bash
+curl http://localhost:5000/products
+curl http://localhost:5000/products
+curl http://localhost:5000/products
+```
+
+As respostas alternam entre `"replica": "replica_1"` e `"replica": "replica_2"` (round-robin). Como as escritas são feitas nas duas réplicas antes de confirmar sucesso e existe rotina de sincronização, ambas devem conter os mesmos produtos. Se houver divergência simples entre arquivos JSON, o Products Service sincroniza automaticamente ao iniciar ou antes das leituras.

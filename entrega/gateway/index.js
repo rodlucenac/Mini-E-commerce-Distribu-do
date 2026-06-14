@@ -18,18 +18,24 @@ const serviceStatus = {
     url: USERS_SERVICE_URL,
     available: true,
     failures: 0,
+    lastFailureAt: null,
+    lastRecoveryAt: null,
   },
   products: {
     name: "products",
     url: PRODUCTS_SERVICE_URL,
     available: true,
     failures: 0,
+    lastFailureAt: null,
+    lastRecoveryAt: null,
   },
   orders: {
     name: "orders",
     url: ORDERS_SERVICE_URL,
     available: true,
     failures: 0,
+    lastFailureAt: null,
+    lastRecoveryAt: null,
   },
 };
 
@@ -46,8 +52,10 @@ async function checkServiceHealth(serviceKey) {
 
     if (response.status === 200) {
       if (!service.available) {
+        const failuresBeforeRecovery = service.failures;
+        service.lastRecoveryAt = new Date().toISOString();
         console.log(
-          `[${new Date().toISOString()}] Serviço ${service.name} recuperado`
+          `[${service.lastRecoveryAt}] Serviço ${service.name} recuperado após ${failuresBeforeRecovery} falha(s) consecutiva(s)`
         );
       }
 
@@ -60,10 +68,15 @@ async function checkServiceHealth(serviceKey) {
   } catch (error) {
     service.failures += 1;
 
+    console.log(
+      `[${new Date().toISOString()}] Falha de health check no serviço ${service.name} (${service.failures} falha(s) consecutiva(s))`
+    );
+
     if (service.failures >= 2 && service.available) {
       service.available = false;
+      service.lastFailureAt = new Date().toISOString();
       console.log(
-        `[${new Date().toISOString()}] Serviço ${service.name} indisponível após 2 falhas consecutivas`
+        `[${service.lastFailureAt}] Serviço ${service.name} indisponível após ${service.failures} falhas consecutivas`
       );
     }
   }
@@ -118,6 +131,8 @@ app.get("/status", (req, res) => {
       available: service.available,
       failures: service.failures,
       url: service.url,
+      lastFailureAt: service.lastFailureAt,
+      lastRecoveryAt: service.lastRecoveryAt,
     };
   }
 

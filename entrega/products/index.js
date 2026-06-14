@@ -42,9 +42,70 @@ function writeReplica(replicaNum, products) {
   );
 }
 
+function replicasAreInSync() {
+  const replica1 = readReplica(1);
+  const replica2 = readReplica(2);
+  return JSON.stringify(replica1) === JSON.stringify(replica2);
+}
+
+function syncReplicas() {
+  const replica1 = readReplica(1);
+  const replica2 = readReplica(2);
+  const productMap = new Map();
+
+  for (const product of replica1) {
+    productMap.set(product.id, product);
+  }
+
+  for (const product of replica2) {
+    if (!productMap.has(product.id)) {
+      productMap.set(product.id, product);
+    }
+  }
+
+  const merged = Array.from(productMap.values()).sort((a, b) => a.id - b.id);
+  const count1 = replica1.length;
+  const count2 = replica2.length;
+
+  if (replicasAreInSync() && count1 === merged.length) {
+    return false;
+  }
+
+  writeReplica(1, merged);
+  writeReplica(2, merged);
+
+  console.log(
+    `[${new Date().toISOString()}] Sincronização de réplicas realizada: réplica_1 tinha ${count1} produto(s), réplica_2 tinha ${count2} produto(s), unificado em ${merged.length} produto(s)`
+  );
+
+  return true;
+}
+
 function writeBothReplicas(products) {
-  writeReplica(1, products);
-  writeReplica(2, products);
+  const backup1 = JSON.parse(JSON.stringify(readReplica(1)));
+  const backup2 = JSON.parse(JSON.stringify(readReplica(2)));
+
+  try {
+    writeReplica(1, products);
+    writeReplica(2, products);
+  } catch (error) {
+    try {
+      writeReplica(1, backup1);
+      writeReplica(2, backup2);
+    } catch (rollbackError) {
+      console.log(
+        `[${new Date().toISOString()}] Erro crítico ao reverter réplicas após falha de escrita`
+      );
+    }
+
+    throw new Error("Falha ao propagar escrita para ambas as réplicas");
+  }
+}
+
+function prepareForRead() {
+  if (!replicasAreInSync()) {
+    syncReplicas();
+  }
 }
 
 function getRoundRobinReplica() {
@@ -84,6 +145,7 @@ app.get("/health", (req, res) => {
 
 app.get("/products", (req, res) => {
   try {
+    prepareForRead();
     const replicaNum = getRoundRobinReplica();
     const products = readReplica(replicaNum);
 
@@ -104,6 +166,7 @@ app.get("/products/:id", (req, res) => {
       return res.status(404).json({ error: "Produto não encontrado" });
     }
 
+    prepareForRead();
     const replicaNum = getRoundRobinReplica();
     const products = readReplica(replicaNum);
     const product = products.find((p) => p.id === productId);
@@ -133,6 +196,7 @@ app.post("/products", validateJwt, requireAdmin, (req, res) => {
       return res.status(400).json({ error: "Campos obrigatórios ausentes" });
     }
 
+    syncReplicas();
     const products = readReplica(1);
     const nextId =
       products.length > 0 ? Math.max(...products.map((p) => p.id)) + 1 : 1;
@@ -145,7 +209,14 @@ app.post("/products", validateJwt, requireAdmin, (req, res) => {
     };
 
     products.push(newProduct);
-    writeBothReplicas(products);
+
+    try {
+      writeBothReplicas(products);
+    } catch (writeError) {
+      return res.status(500).json({
+        error: "Falha ao replicar produto nas duas réplicas",
+      });
+    }
 
     res.status(201).json({
       message: "Produto criado com sucesso",
@@ -157,6 +228,7 @@ app.post("/products", validateJwt, requireAdmin, (req, res) => {
 });
 
 ensureReplicaFiles();
+syncReplicas();
 
 app.listen(PORT, "0.0.0.0", () => {
   console.log(`Products service running on port ${PORT}`);
