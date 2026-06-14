@@ -9,7 +9,9 @@ Este projeto implementa um mini e-commerce distribuído. Atualmente contém:
 - **Serviço de Pedidos** — criação e listagem de pedidos (porta 5003)
 - **API Gateway** — ponto único de entrada do cliente com heartbeat (porta 5000)
 
-Os demais componentes (Docker Compose completo e relatório final) serão implementados nas próximas etapas.
+O sistema pode ser executado manualmente (serviço a serviço) ou com **Docker Compose**, subindo toda a infraestrutura de uma vez.
+
+O relatório final será adicionado na próxima etapa.
 
 ---
 
@@ -303,4 +305,141 @@ E também:
 
 ```bash
 curl http://localhost:5000/health
+```
+
+---
+
+## Executando com Docker Compose
+
+Para subir toda a infraestrutura de uma vez:
+
+```bash
+cd entrega
+docker compose up --build
+```
+
+O sistema ficará disponível no Gateway em `http://localhost:5000`.
+
+Os microsserviços internos usam os nomes dos containers:
+
+- `http://users:5001`
+- `http://products:5002`
+- `http://orders:5003`
+
+### Health do Gateway
+
+```bash
+curl http://localhost:5000/health
+```
+
+### Status dos serviços monitorados
+
+```bash
+curl http://localhost:5000/status
+```
+
+### Criar admin
+
+```bash
+curl -X POST http://localhost:5000/users/register \
+  -H "Content-Type: application/json" \
+  -d '{"name":"Admin","email":"admin@email.com","password":"123456","role":"admin"}'
+```
+
+### Login admin
+
+```bash
+curl -X POST http://localhost:5000/users/login \
+  -H "Content-Type: application/json" \
+  -d '{"email":"admin@email.com","password":"123456"}'
+```
+
+### Criar produto com token admin
+
+```bash
+curl -X POST http://localhost:5000/products \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer COLE_O_TOKEN_ADMIN_AQUI" \
+  -d '{"name":"Notebook","price":3500,"stock":10}'
+```
+
+### Listar produtos
+
+```bash
+curl http://localhost:5000/products
+```
+
+### Criar usuário comum
+
+```bash
+curl -X POST http://localhost:5000/users/register \
+  -H "Content-Type: application/json" \
+  -d '{"name":"Joao","email":"joao@email.com","password":"123456","role":"user"}'
+```
+
+### Login usuário comum
+
+```bash
+curl -X POST http://localhost:5000/users/login \
+  -H "Content-Type: application/json" \
+  -d '{"email":"joao@email.com","password":"123456"}'
+```
+
+### Criar pedido
+
+```bash
+curl -X POST http://localhost:5000/orders \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer COLE_O_TOKEN_USER_AQUI" \
+  -d '{"productId":1,"quantity":2}'
+```
+
+### Listar pedidos
+
+```bash
+curl http://localhost:5000/orders/1 \
+  -H "Authorization: Bearer COLE_O_TOKEN_USER_AQUI"
+```
+
+### Testar heartbeat com Docker
+
+Com Docker Compose, é possível simular queda do serviço de pedidos:
+
+```bash
+docker compose stop orders
+```
+
+Aguarde cerca de 10 segundos e verifique o status:
+
+```bash
+curl http://localhost:5000/status
+```
+
+Depois teste uma rota de pedidos:
+
+```bash
+curl -X POST http://localhost:5000/orders \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer COLE_O_TOKEN_USER_AQUI" \
+  -d '{"productId":1,"quantity":2}'
+```
+
+Deve retornar `503`.
+
+Os outros serviços devem continuar funcionando:
+
+```bash
+curl http://localhost:5000/products
+```
+
+Para subir o serviço de pedidos novamente:
+
+```bash
+docker compose start orders
+```
+
+Aguarde alguns segundos e verifique:
+
+```bash
+curl http://localhost:5000/status
 ```
