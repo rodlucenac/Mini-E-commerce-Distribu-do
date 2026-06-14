@@ -12,10 +12,76 @@ const PRODUCTS_SERVICE_URL =
 const ORDERS_SERVICE_URL =
   process.env.ORDERS_SERVICE_URL || "http://localhost:5003";
 
+const serviceStatus = {
+  users: {
+    name: "users",
+    url: USERS_SERVICE_URL,
+    available: true,
+    failures: 0,
+  },
+  products: {
+    name: "products",
+    url: PRODUCTS_SERVICE_URL,
+    available: true,
+    failures: 0,
+  },
+  orders: {
+    name: "orders",
+    url: ORDERS_SERVICE_URL,
+    available: true,
+    failures: 0,
+  },
+};
+
 app.use(cors());
 app.use(express.json());
 
-async function forwardRequest(req, res, serviceUrl, path) {
+function handleServiceFailure(service) {
+  service.failures += 1;
+
+  if (service.failures >= 2 && service.available) {
+    service.available = false;
+    console.log(
+      `[${new Date().toISOString()}] Serviço ${service.name} indisponível após 2 falhas consecutivas`
+    );
+  }
+}
+
+async function checkServiceHealth(serviceKey) {
+  const service = serviceStatus[serviceKey];
+
+  try {
+    const response = await axios.get(`${service.url}/health`, {
+      timeout: 2000,
+    });
+
+    if (response.status === 200) {
+      const wasUnavailable = !service.available;
+      service.failures = 0;
+      service.available = true;
+
+      if (wasUnavailable) {
+        console.log(
+          `[${new Date().toISOString()}] Serviço ${service.name} recuperado`
+        );
+      }
+    } else {
+      handleServiceFailure(service);
+    }
+  } catch (error) {
+    handleServiceFailure(service);
+  }
+}
+
+async function forwardRequest(req, res, serviceKey, path) {
+  const service = serviceStatus[serviceKey];
+
+  if (!service.available) {
+    return res
+      .status(503)
+      .json({ error: "Serviço indisponível no momento" });
+  }
+
   try {
     const headers = {
       "Content-Type": "application/json",
@@ -27,7 +93,7 @@ async function forwardRequest(req, res, serviceUrl, path) {
 
     const config = {
       method: req.method,
-      url: `${serviceUrl}${path}`,
+      url: `${service.url}${path}`,
       headers,
       validateStatus: () => true,
     };
@@ -47,42 +113,65 @@ app.get("/health", (req, res) => {
   res.status(200).json({ status: "ok", service: "gateway" });
 });
 
+app.get("/status", (req, res) => {
+  const services = {};
+
+  for (const key of Object.keys(serviceStatus)) {
+    const service = serviceStatus[key];
+    services[key] = {
+      available: service.available,
+      failures: service.failures,
+      url: service.url,
+    };
+  }
+
+  res.status(200).json({
+    gateway: "ok",
+    services,
+  });
+});
+
 app.post("/users/register", (req, res) => {
-  forwardRequest(req, res, USERS_SERVICE_URL, "/users/register");
+  forwardRequest(req, res, "users", "/users/register");
 });
 
 app.post("/users/login", (req, res) => {
-  forwardRequest(req, res, USERS_SERVICE_URL, "/users/login");
+  forwardRequest(req, res, "users", "/users/login");
 });
 
 app.get("/users/:id", (req, res) => {
-  forwardRequest(req, res, USERS_SERVICE_URL, `/users/${req.params.id}`);
+  forwardRequest(req, res, "users", `/users/${req.params.id}`);
 });
 
 app.get("/products", (req, res) => {
-  forwardRequest(req, res, PRODUCTS_SERVICE_URL, "/products");
+  forwardRequest(req, res, "products", "/products");
 });
 
 app.get("/products/:id", (req, res) => {
-  forwardRequest(req, res, PRODUCTS_SERVICE_URL, `/products/${req.params.id}`);
+  forwardRequest(req, res, "products", `/products/${req.params.id}`);
 });
 
 app.post("/products", (req, res) => {
-  forwardRequest(req, res, PRODUCTS_SERVICE_URL, "/products");
+  forwardRequest(req, res, "products", "/products");
 });
 
 app.post("/orders", (req, res) => {
-  forwardRequest(req, res, ORDERS_SERVICE_URL, "/orders");
+  forwardRequest(req, res, "orders", "/orders");
 });
 
 app.get("/orders/:userId", (req, res) => {
-  forwardRequest(
-    req,
-    res,
-    ORDERS_SERVICE_URL,
-    `/orders/${req.params.userId}`
-  );
+  forwardRequest(req, res, "orders", `/orders/${req.params.userId}`);
 });
+
+Object.keys(serviceStatus).forEach((serviceKey) => {
+  checkServiceHealth(serviceKey);
+});
+
+setInterval(() => {
+  Object.keys(serviceStatus).forEach((serviceKey) => {
+    checkServiceHealth(serviceKey);
+  });
+}, 5000);
 
 app.listen(PORT, "0.0.0.0", () => {
   console.log(`Gateway service running on port ${PORT}`);

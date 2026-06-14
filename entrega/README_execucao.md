@@ -9,7 +9,7 @@ Este projeto implementa um mini e-commerce distribuído. Atualmente contém:
 - **Serviço de Pedidos** — criação e listagem de pedidos (porta 5003)
 - **API Gateway** — ponto único de entrada do cliente (porta 5000)
 
-Os demais serviços (Heartbeat e Docker Compose completo) serão implementados nas próximas etapas.
+Os demais componentes (Docker Compose completo e relatório final) serão implementados nas próximas etapas.
 
 ---
 
@@ -256,4 +256,57 @@ curl -X POST http://localhost:5000/orders \
 ```bash
 curl http://localhost:5000/orders/1 \
   -H "Authorization: Bearer COLE_O_TOKEN_AQUI"
+```
+
+### Heartbeat no API Gateway
+
+O gateway monitora automaticamente a saúde dos microsserviços. A cada 5 segundos, envia `GET /health` para os serviços de usuários, produtos e pedidos.
+
+Se um serviço falhar em 2 verificações consecutivas, o gateway:
+
+- marca o serviço como indisponível;
+- registra um log com timestamp;
+- bloqueia as rotas daquele serviço, retornando `503`.
+
+Quando o serviço volta a responder corretamente, o gateway registra a recuperação nos logs e libera as rotas novamente.
+
+#### Ver status dos serviços
+
+```bash
+curl http://localhost:5000/status
+```
+
+#### Simular queda do Serviço de Pedidos
+
+Se estiver rodando manualmente, pare o terminal do serviço `orders`.
+
+Aguarde cerca de 10 segundos para o heartbeat detectar 2 falhas consecutivas. Depois teste:
+
+```bash
+curl -X POST http://localhost:5000/orders \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer COLE_O_TOKEN_AQUI" \
+  -d '{"productId":1,"quantity":2}'
+```
+
+Deve retornar:
+
+```json
+{
+  "error": "Serviço indisponível no momento"
+}
+```
+
+Com status `503`.
+
+#### Confirmar que os outros serviços continuam funcionando
+
+```bash
+curl http://localhost:5000/products
+```
+
+E também:
+
+```bash
+curl http://localhost:5000/health
 ```
